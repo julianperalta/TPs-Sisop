@@ -29,29 +29,29 @@
 #Ayuda 
 
 ayuda() {
-	 echo "Ejercicio 3 - TP1 - Universidad Nacional de La Matanza 
+	 echo "Ejercicio 3 - TP1 - Universidad Nacional de La Matanza
 	
-	 echo Descripcion:
-	 echo El script ejecutara un demonio que realizara un backup de un directorio pasado por parametro cada un intervalo de tiempo. 
-	 echo Cuenta la cantidad de archivos backup en el directorio y limpia el directorio donde se dejan los backups hasta una cierta cantidad.
-	 echo Las opciones son:
+	 Descripcion:
+	 El script ejecutara un demonio que realizara un backup de un directorio pasado por parametro cada un intervalo de tiempo. 
+	 Cuenta la cantidad de archivos backup en el directorio y limpia el directorio donde se dejan los backups hasta una cierta cantidad.
+	 Las opciones son:
 	
-	 echo [start]: Iniciar el demonio.
-	 echo [stop]:  Finalizar el demonio.
-	 echo [count]: Contar la cantidad de archivos backups que hay en el directorio.
-	 echo [clear]: Limpiar el directorio de backups.
-	 echo [play]:  Crear el backup en ese instante.
+	 [start]: Iniciar el demonio.
+	 [stop]:  Finalizar el demonio.
+	 [count]: Contar la cantidad de archivos backups que hay en el directorio de destino.
+	 [clear]: Limpiar el directorio de destino de backups.
+	 [play]:  Crear el backup en ese instante.
 	
-	 echo Modo de ejecucion:
-	 echo ./ejercicio3.sh [start <dirBKP> <dirDest> <tiempo[s]>|stop|count|clear [cantidad]|play]
+	 Modo de ejecucion:
+	 ./ejercicio3.sh [start <dirBKP> <dirDest> <tiempo[s]> [cantidad]] | [stop] | [count <dirDest>] | [clear <dirDest>] | [play <dirBKP> <dirDest>]
 	
-	 echo Donde:
+	 Donde:
 	
-	 echo dirBKP: es el directorio origen.
-	 echo dirDest: es el directorio destino
-	 echo tiempo[s]: intervalo de tiempo asignado.
-	 echo cantidad: cantidad de archivos que quedaran en el backup."
-	 echo "\n"
+	 dirBKP: es el directorio origen.
+	 dirDest: es el directorio destino
+	 tiempo[s]: intervalo de tiempo asignado.
+	 cantidad: cantidad de archivos que quedaran en el backup."
+	 echo -e"\n"
 	exit 0
 }
 
@@ -96,7 +96,7 @@ Iniciar_Demonio() {
 	 echo "Se iniciará el demonio"
 		dirBKP="$(readlink -f $1)"
 		dirDest="$(readlink -f $2)"
-		nohup sh ./demonio.sh $dirBKP $dirDest $3 >/dev/null & #Corre el demonio, con el & lo deja corriendo en 2do plano
+		nohup sh ./demonio.sh "$dirBKP" "$dirDest" $3 2>/dev/null & #Corre el demonio, con el & lo deja corriendo en 2do plano
 }	
 
 ######################################################
@@ -110,7 +110,7 @@ while [ -n $1 ]; do #Verifica que el string no sea nulo
 		verificoDemonioActivo
 		if [ $? -eq 0 ]
 			then
-				Iniciar_Demonio $2 $3 $4
+				Iniciar_Demonio "$2" "$3" $4
 			else
 				 echo "Ya hay un demonio corriendo actualmente"
 		fi
@@ -133,8 +133,8 @@ while [ -n $1 ]; do #Verifica que el string no sea nulo
 	count)
 		if [ -d "$2" ]
 			then
-				echo "Se ha encontrado la siguiente cantidad de backups en el directorio `$2`"
-				ls -1q $2/bkp* | wc -l
+				echo "Se ha encontrado la siguiente cantidad de backups en el directorio '$2'"
+				ls -1q "$2"bkp* | wc -l
 			else
 				echo "El directorio de backups no existe."
 		fi
@@ -144,7 +144,7 @@ while [ -n $1 ]; do #Verifica que el string no sea nulo
 	clear)
 		if [ -d "$2" ]
 			then
-				rm -rf $2 && mkdir $2
+				rm -rf "$2" && mkdir "$2"
 				echo "Se ha vaciado el directorio de backups"
 			else
 				echo "El directorio de backups no existe."
@@ -153,9 +153,9 @@ while [ -n $1 ]; do #Verifica que el string no sea nulo
 		;;
 		
 	play)
-		bash ~/ejercicio3.sh start $2 $3 $4
+		bash ~/ejercicio3.sh start "$2" "$3" $4
 		sleep $4
-		bash ~/ejercicio3.sh stop $2 $3 $4
+		bash ~/ejercicio3.sh stop "$2" "$3" $4
 		exit 1
 		;;
 		
