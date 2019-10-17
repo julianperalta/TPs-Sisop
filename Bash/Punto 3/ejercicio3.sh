@@ -57,14 +57,14 @@ ayuda() {
 
 # Utilizo getopts para atrapar los flags que se pasen, en este caso -h para la ayuda
 
-#while getopts ":h" opt
-#do
-#	case "$opt" in
-#		h) ayuda;;
-#		\?) echo "Opción inválida. Para ver la ayuda use -h."
-#		exit 0;;
-#	esac
-#done
+while getopts ":h" opt
+do
+	case "$opt" in
+		h) ayuda;;
+		\?) echo "Opción inválida. Para ver la ayuda use -h."
+		exit 0;;
+	esac
+done
 
 # Verifico si son Directorios
 
