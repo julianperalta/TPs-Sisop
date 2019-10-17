@@ -56,7 +56,7 @@ if($Entrada -and $Salida) {
         Write-Host "`nEl parámetro pasado en '-Entrada' no es un path válido.`n"
         exit -1
     }
-    ElseIf(-not (Test-Path -Path $Salida)) {
+    ElseIf(-not (Split-Path $Salida | Test-Path -Path)) {
         Write-Host "`nEl parámetro pasado en '-Salida' no es un path válido.`n"
         exit -1
     }
