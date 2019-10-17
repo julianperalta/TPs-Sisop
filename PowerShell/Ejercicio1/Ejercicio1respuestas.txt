@@ -1,0 +1,11 @@
+Ejercicio 1 
+
+	1) El script declara un parametro no obligatorio llamado Pathsalida y le asigna el path de un archivo .txt, un entero Cantidad inicializado en 3.
+	Verifica la existencia del path ingresado en el directorio actual, si es verdadero lo guarda en la variable existe.
+	Luego en la variable Listaproceso guarda los procesos que estan activos, segun numero de Id y Nombre y los guarda en el Pathsalida con formato de lista.
+	Finalmente imprime desde 0 hasta el valor de cantidad los procesos por Nombre y Id.
+	En el caso en que el Path ingresado no fuera existente emite un error informando la situacion.
+
+	2) En el caso de la variable entera se podria validar la posicion.
+
+	3) Si el script se ejecuta sin ningun parametro se tomaran los ya declarados, en el caso de Cantidad = 3 y el Path buscara en el directorio actual el archivo 	llamado ./procesos.txt
