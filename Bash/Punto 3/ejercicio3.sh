@@ -17,7 +17,7 @@
 # Fiorita, Leandro - DNI: 40012291
 # Gentile, Soledad - DNI: 28053027 
 # Peralta, Julián - DNI: 40242831
-#Entrega: Reentrega 01/10/2019
+#Entrega: 3 - 17/10/2019
 ################################################################################
 
 
@@ -43,7 +43,7 @@ ayuda() {
 	 [play]:  Crear el backup en ese instante.
 	
 	 Modo de ejecucion:
-	 ./ejercicio3.sh [start <dirBKP> <dirDest> <tiempo[s]> [cantidad]] | [stop] | [count <dirDest>] | [clear <dirDest>] | [play <dirBKP> <dirDest>]
+	 ./ejercicio3.sh [start <dirBKP> <dirDest> <tiempo[s]>] | [stop] | [count <dirDest>] | [clear <dirDest>] | [play <dirBKP> <dirDest>]
 	
 	 Donde:
 	
@@ -51,20 +51,20 @@ ayuda() {
 	 dirDest: es el directorio destino
 	 tiempo[s]: intervalo de tiempo asignado.
 	 cantidad: cantidad de archivos que quedaran en el backup."
-	 echo -e"\n"
+	 echo -e "\n"
 	exit 0
 }
 
 # Utilizo getopts para atrapar los flags que se pasen, en este caso -h para la ayuda
 
-while getopts ":h" opt
-do
-	case "$opt" in
-		h) ayuda;;
-		\?) echo "Opción inválida. Para ver la ayuda use -h."
-		exit 0;;
-	esac
-done
+#while getopts ":h" opt
+#do
+#	case "$opt" in
+#		h) ayuda;;
+#		\?) echo "Opción inválida. Para ver la ayuda use -h."
+#		exit 0;;
+#	esac
+#done
 
 # Verifico si son Directorios
 
@@ -94,8 +94,8 @@ verificoDemonioActivo() {
 
 Iniciar_Demonio() {
 	 echo "Se iniciará el demonio"
-		dirBKP="$(readlink -f $1)"
-		dirDest="$(readlink -f $2)"
+		dirBKP="$(readlink -f "$1")"
+		dirDest="$(readlink -f "$2")"
 		nohup sh ./demonio.sh "$dirBKP" "$dirDest" $3 2>/dev/null & #Corre el demonio, con el & lo deja corriendo en 2do plano
 }	
 
@@ -107,6 +107,13 @@ while [ -n $1 ]; do #Verifica que el string no sea nulo
 	case $1 in
 	
 	start)
+		if [ $# -lt 4 ]
+			then
+				echo "No se han ingresado todos los parametros requeridos"
+				echo "Se debe ingresar el path de los archivos a los cuales se les quiere realizar el backup, el path del backup, y el tiempo entre backups en segundos"
+				exit -1
+			fi
+
 		verificoDemonioActivo
 		if [ $? -eq 0 ]
 			then
@@ -152,15 +159,15 @@ while [ -n $1 ]; do #Verifica que el string no sea nulo
 		exit 1
 		;;
 		
-	play)
-		bash ~/ejercicio3.sh start "$2" "$3" $4
-		sleep $4
-		bash ~/ejercicio3.sh stop "$2" "$3" $4
+	play)		
+		nombre_archivo=bkp_$(date '+%d_%m_%Y_%H_%M_%S').tar.gz
+		tar czf "$3"/$nombre_archivo "$2"
+		echo "Backup realizado correctamente."
 		exit 1
 		;;
-		
+
 	*)
-		echo "La opción ingresada es incorrecta."
+		echo "La opción ingresada es incorrecta. Ingrese la opción -h para ver la ayuda"
 		exit 1
 		;;
 	esac 
