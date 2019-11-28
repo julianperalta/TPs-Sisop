@@ -1,0 +1,4 @@
+1- Ejecutar server con los parametros correspondientes.
+2- Desde una terminal abrir consumer enviandole como parametro la ruta del fifo de escritura.
+3- En otra terminal, enviar las consultas. Por ejemplo: echo "id=1234" > fifo.in
+4- La respuesta a la consulta se visualizará en la terminal que está corriendo al consumer.

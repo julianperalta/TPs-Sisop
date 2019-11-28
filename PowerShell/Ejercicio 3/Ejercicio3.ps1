@@ -9,7 +9,7 @@ Autores:
     - Fiorita, Leandro
     - Gentile, Soledad
     - Peralta, Julián
-Entrega: #1
+Entrega: #2
 
 .DESCRIPTION
    Este script mueve los archivos de un directorio a otro mediante un archivo CSV que indica las rutas de destino. Finalmente escribe un archivo CSV de salida (un log) con todos los movimientos realizados y la fecha de ejecución.
@@ -51,13 +51,13 @@ if(!$Entrada -or !$Salida) {
     exit -1
 }
 
-if($Entrada -and $Salida) {
-    If(-not (Test-Path -Path $Entrada)) {
-        Write-Host "`nEl parámetro pasado en '-Entrada' no es un path válido.`n"
+if("$Entrada" -and "$Salida") {
+    If(-not (Test-Path -Path "$Entrada")) {
+        Write-Host "`nEl path pasado en '-Entrada' es inválido.`n"
         exit -1
     }
-    ElseIf(-not (Split-Path $Salida | Test-Path -Path)) {
-        Write-Host "`nEl parámetro pasado en '-Salida' no es un path válido.`n"
+    ElseIf(-not (Split-Path "$Salida" | Test-Path)) {
+        Write-Host "`nEl path pasado en '-Salida' es inválido.`n"
         exit -1
     }
 }

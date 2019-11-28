@@ -39,7 +39,7 @@ Autores:
     - Fiorita, Leandro (DNI: 40012291)
     - Gentile, Soledad (DNI: 28053027)
     - Peralta, Julián (DNI: 40242831)
-Entrega: #1
+Entrega: Segunda reentrega.
 #>
 
 # Configuración de parámetros de entrada
@@ -110,12 +110,16 @@ function Test-PathZip {
 
     # Por cada archivo del .zip, calculo e informo
     foreach($archivo in $archivosZip.Entries){
+
+        if($archivo.Length -eq 0){
+            continue;
+        }
         
         [pscustomobject]@{
                 Archivo = $archivo.FullName
                 Peso_Comprimido = $archivo.CompressedLength
                 Peso = $archivo.Length
-                Relacion = "{0:P2}" -f ([long]$archivo.CompressedLength / [long]$archivo.Length)
+                Relacion = "{0:P3}" -f ([long]$archivo.CompressedLength / [long]$archivo.Length)
         } 
     }
  }

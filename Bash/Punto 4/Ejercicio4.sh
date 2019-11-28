@@ -11,14 +11,15 @@
 # Fiorita, Leandro - DNI: 40012291
 # Gentile, Soledad - DNI: 28053027 
 # Peralta, Julián - DNI: 40242831
-#Entrega: Segunda entrega
+#Entrega: Tercera entrega
 ###################################################################################
 
 #Contador de líneas de código y comentarios.
 #Cuenta la cantidad de líneas que son de código y de comentario pertenecientes a todos los archivos de una cierta extensión en una ruta.
 
 function documentacion {
-    echo 'Modo de empleo: Script "directorio" [extension]'
+    echo 'Modo de empleo: ./Ejercicio4.sh <directorio> <extension>'
+    echo 'Ejemplo: ./Ejercicio4.sh ./ c'
     echo "  -h      Mostrar ayuda"
     echo "directorio: La ruta donde se analizaran los archivos."
     echo "extension: Tipo de archivo a analizar."
@@ -37,7 +38,15 @@ then
 	exit 1
 fi
 
+if [ -d "$1" ]
+then
+echo ""
+else
+echo "El parámetro enviado no es un directorio válido."
+exit 1
+fi
 
+IFS=$'\n'
 x=0 #Cuenta lineas de comentarios "/* */
 y=0 #Cuenta las lineas con //
 comentariosAux=0
@@ -98,20 +107,29 @@ done
 echo "Se han analizado $cantidadArchivos archivos."
 if [ $cantidadArchivos -gt 0 ]
 then
-porcentajeCodigo=`expr $codigos \* 100`
-porcentajeCodigo=`expr $porcentajeCodigo \/ $totalLineas`
-porcentajeComment=`expr $comentarios \* 100`
-porcentajeComment=`expr $porcentajeComment \/ $totalLineas`
-porcentajeLineasEnBlanco=`echo "100 - $porcentajeComment" | bc`
-porcentajeLineasEnBlanco=`echo "$porcentajeLineasEnBlanco - $porcentajeCodigo" | bc`
-echo "El porcentaje de código es del $porcentajeCodigo%."
-echo "El porcentaje de comentarios es del $porcentajeComment%."
-echo "El porcentaje de lineas en blanco es del $porcentajeLineasEnBlanco%."
-echo "La cantidad total de comentarios es de: $comentarios lineas."
-echo "La cantidad total de lineas de código es de: $codigos."
-echo "Lineas analizadas: $totalLineas"
-exit 0
+	if [ $totalLineas -gt 0 ]
+	then
+	porcentajeCodigo=`expr $codigos \* 100`
+	porcentajeCodigo=`expr $porcentajeCodigo \/ $totalLineas`
+	porcentajeComment=`expr $comentarios \* 100`
+	porcentajeComment=`expr $porcentajeComment \/ $totalLineas`
+	porcentajeLineasEnBlanco=`echo "100 - $porcentajeComment" | bc`
+	porcentajeLineasEnBlanco=`echo "$porcentajeLineasEnBlanco - $porcentajeCodigo" | bc`
+	echo "El porcentaje de código es del $porcentajeCodigo%."
+	echo "El porcentaje de comentarios es del $porcentajeComment%."
+	echo "El porcentaje de lineas en blanco es del $porcentajeLineasEnBlanco%."
+	echo "La cantidad total de comentarios es de: $comentarios lineas."
+	echo "La cantidad total de lineas de código es de: $codigos."
+	echo "Lineas analizadas: $totalLineas"
+	else
+	echo "No se ha analizado ninguna linea."
+	fi
+	unset IFS
+	exit 0
+	fi
+	
 fi
+unset IFS
 exit 1
 
 ###################################################################################

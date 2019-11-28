@@ -1,4 +1,4 @@
-<#
+﻿<#
 .Synopsis
 Nombre del archivo: Ejercicio5.ps1
 Trabajo Práctico: 2
@@ -9,28 +9,41 @@ Autores:
     - Fiorita, Leandro
     - Gentile, Soledad
     - Peralta, Julián
-Entrega: #1
+Entrega: #2
 
 .DESCRIPTION
    Este script puede contar la cantidad de procesos corriendo en el sistema, o
-   mostrar el peso de un directorio cada 10 segundos.
+   mostrar el peso de un directorio cada 1 segundo.
+
+.EXAMPLE
+        .\Ejercicio5.ps1 -Procesos
+        201
+.EXAMPLE
+        .\Ejercicio5.ps1 -Peso
+        3050
+.EXAMPLE
+        .\Ejercicio5.ps1 -Peso "./Pruebas/test1"
+        45030
+.EXAMPLE
+        .\Ejercicio5.ps1 -Peso -Directorio ".."
+        23467892
 
 .PARAMETER Procesos
     Indica al script que debe mostrar la cantidad de procesos actuales en el sistema.
 
 .PARAMETER Peso
-    Indica al script que debe verificar el peso del directorio actual (en MB).
+    Indica al script que debe verificar el peso del directorio actual.
 
 .PARAMETER Directorio
-    Establece ruta a analizar su peso (en MB).
+    Establece ruta a analizar su peso.
 
 #>
 
 
 Param(
-        [parameter(mandatory=$true, ParameterSetName = 'Procesos')][switch]$Procesos,
-        [parameter(mandatory=$true, ParameterSetName = 'PesoDirectorio')][switch]$Peso,
-        [parameter(mandatory=$false, ParameterSetName = 'PesoDirectorio')][string]$Directorio
+        [parameter(mandatory=$true, Position = 0, ParameterSetName = 'Procesos')][switch]$Procesos,
+        [parameter(mandatory=$true, Position = 0, ParameterSetName = 'PesoDirectorio')][switch]$Peso,
+        [parameter(mandatory=$false,Position = 1, ParameterSetName = 'PesoDirectorio')][string]$Directorio
      )
 
 function Get-Procesos()
@@ -38,8 +51,6 @@ function Get-Procesos()
     $cantidadProcesos = Get-Process | Measure
     return $cantidadProcesos.Count
 }
-
-#Sección de validación (Utilizando ParameterSetName no debería entrar por acá)
 
 if($Procesos -and $Peso)
 {
@@ -55,29 +66,45 @@ if($Procesos -and $Directorio)
 
 #Sección de ejecución
 
-while ($true) {
-
-    if($Procesos)
+if($Procesos)
+{
+    while($true)
     {
         $retorno = Get-Procesos
         Write-Output $retorno
+        Start-Sleep -Seconds 1 
     }
+        
+}
 
-    if($Peso)
+if($Peso)
+{
+    if($Directorio)
     {
-        if($Directorio)
+        $directorioValido = Test-Path -Path $Directorio
+        if($directorioValido -eq $true)
         {
-            $tamCarpeta = "{0:N2}" -f ((Get-ChildItem -Recurse $Directorio | Measure-Object -Property Length -s).Sum / 1Mb)
-            Write-Output $tamCarpeta
+            while($true)
+            {
+                $tamCarpeta = (Get-ChildItem -Recurse $Directorio | Measure-Object -Property Length -Sum).Sum
+                Write-Output $tamCarpeta
+                Start-Sleep -Seconds 1
+            }   
         }
         else
         {
-            $tamCarpeta = "{0:N2}" -f ((Get-ChildItem -Recurse $PWD | Measure-Object -Property Length -s).Sum / 1Mb)
-            Write-Output $tamCarpeta
+            Write-Output "El directorio especificado no es valido."
         }
     }
-
-    Start-Sleep -Seconds 10 
-} 
-
+    else
+    {
+        while($true)
+        {
+            $tamCarpeta = (Get-ChildItem -Recurse $PWD | Measure-Object -Property Length -Sum).Sum
+            Write-Output $tamCarpeta
+            Start-Sleep -Seconds 1
+        }
+        
+    }
+}
 <# FIN DE SCRIPT #>

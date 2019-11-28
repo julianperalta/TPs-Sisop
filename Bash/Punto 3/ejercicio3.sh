@@ -1,11 +1,5 @@
 #!/bin/bash
 
-
-#.SYNOPSIS
-#Ejercicio n° 3 del trabajo practico n° 1 de Sistemas Operativos, Universidad Nacional de  La Matanza.
-#.DESCRIPTION
-#El script creará un Backup de un directorio pasado por parametro, cada 5 segundos. Para ello utilizara un demonio.
-
 ###################################################################################
 ###                             INICIO DE SCRIPT                                ###
 #Nombre del script: ejercicio3.sh
@@ -17,159 +11,175 @@
 # Fiorita, Leandro - DNI: 40012291
 # Gentile, Soledad - DNI: 28053027 
 # Peralta, Julián - DNI: 40242831
-#Entrega: 3 - 17/10/2019
-################################################################################
+#Entrega: Tercera reentrega
+###################################################################################
 
+mostrarSintaxis()
+{
+	echo -e "\n-----------------------------------------------------------------------------------------------------------------------------------------------------"
+	echo "Ejercicio 3 - TP Bash"
+        echo -e "-----------------------------------------------------------------------------------------------------------------------------------------------------"
+        echo "	-Descripción:
+	 	El script ejecutará un demonio que realizará un backup de un directorio cada cierto intervalo de tiempo (o al instante). 
+         	También puede indicarse que cuente la cantidad de archivos backup en el directorio o limpiar el mismo.
+         
+	 -Los comandos del demonio son:
+	 	start: Iniciar el demonio.
+         	stop:  Finalizar el demonio.
+         	count: Contar la cantidad de archivos backups que hay en el directorio de destino.
+         	clear: Limpiar el directorio de destino de backups.
+         	play:  Crear el backup en ese instante.
+		
+		Para utilizar los comandos 'stop', 'count' y 'play', debe estar el demonio activo.
 
-
-#FUNCIONES############################################
-
-#Funcion errores
-
-#Ayuda 
-
-ayuda() {
-	 echo "Ejercicio 3 - TP1 - Universidad Nacional de La Matanza
-	
-	 Descripcion:
-	 El script ejecutara un demonio que realizara un backup de un directorio pasado por parametro cada un intervalo de tiempo. 
-	 Cuenta la cantidad de archivos backup en el directorio y limpia el directorio donde se dejan los backups hasta una cierta cantidad.
-	 Las opciones son:
-	
-	 [start]: Iniciar el demonio.
-	 [stop]:  Finalizar el demonio.
-	 [count]: Contar la cantidad de archivos backups que hay en el directorio de destino.
-	 [clear]: Limpiar el directorio de destino de backups.
-	 [play]:  Crear el backup en ese instante.
-	
-	 Modo de ejecucion:
-	 ./ejercicio3.sh [start <dirBKP> <dirDest> <tiempo[s]>] | [stop] | [count <dirDest>] | [clear <dirDest>] | [play <dirBKP> <dirDest>]
-	
-	 Donde:
-	
-	 dirBKP: es el directorio origen.
-	 dirDest: es el directorio destino
-	 tiempo[s]: intervalo de tiempo asignado.
-	 cantidad: cantidad de archivos que quedaran en el backup."
-	 echo -e "\n"
-	exit 0
+         -Sintaxis:
+         	$0 start <dirBKP> <dirDest> <tiempo[s]> | stop | count | clear [cantidad] | play
+        
+         -Donde:
+         	dirBKP: Directorio del que se hará el backup.
+         	dirDest: Directorio destino del backup.
+         	tiempo[s]: Intervalo de tiempo en segundos entre cada backup.
+		cantidad: Archivos de backup que quedarán en el directorio de destino (los N más nuevos)."
+	echo -e "-----------------------------------------------------------------------------------------------------------------------------------------------------\n"
 }
 
-# Utilizo getopts para atrapar los flags que se pasen, en este caso -h para la ayuda
-
-while getopts ":h" opt
-do
-	case "$opt" in
-		h) ayuda;;
-		\?) echo "Opción inválida. Para ver la ayuda use -h."
-		exit 0;;
-	esac
-done
-
-# Verifico si son Directorios
-
-esDirectorio() {
-	if [ ! -d "$1" ] && [ ! -d "$2" ]
-	then						# Si el parámetro no es un directorio, muestra
-		echo "\nParámetro inválido."		# el mensaje de error y se detiene la ejecución
-		echo "\"$1\" "\$2" no es un directorio valido."
-		echo "Ejecute el script con -h para más información.\n"
-		exit 0
-	fi
+esDirectorio(){
+        if ! test -d "$1"; then                         # Si el parámetro no es un directorio, muestra
+                echo -e "\n¡ERROR DE INVOCACIÓN!\n"     # el mensaje de error y se detiene la ejecución.
+                echo -e "\"$1\" no es un directorio.\n"
+                echo -e "Ejecute el script con -h, -? o --help para más información.\n"
+                exit 1
+        fi
 }
 
-#Verifico si hay un demonio activo
-
-verificoDemonioActivo() {
-	demonio=`ps -ef | grep ^$(whoami) | grep ./demonio.sh | grep -v grep | grep -v $$ | wc -l` #ps -ef ve los procesos completos
-	if [ $demonio != 0 ]; then
-	
-		#demonio activo
-		return 1 #Esta corriendo demonio
-	else
-		#No hay demonio activo
-		return 0 #no esta corriendo demonio
-	fi
+errorInvocacion(){
+        echo -e "\n¡ERROR DE INVOCACIÓN!\n" # Función genérica para mostrar mensajes de error.
+        echo -e "$1.\n"
+        echo -e "Ejecute el script con -h, -? o --help para más información.\n"
+        exit 1
 }
 
-Iniciar_Demonio() {
-	 echo "Se iniciará el demonio"
-		dirBKP="$(readlink -f "$1")"
-		dirDest="$(readlink -f "$2")"
-		nohup sh ./demonio.sh "$dirBKP" "$dirDest" $3 2>/dev/null & #Corre el demonio, con el & lo deja corriendo en 2do plano
-}	
+existeDemonio(){ # Devuelve el pid del demonio, en caso de que este exista.
+	local pid
+	pid=$(pgrep demonio.sh)
+	echo $pid
+}
 
-######################################################
+if [ $# -eq 0 ] || [ $# -gt 4 ]; then # Verifico que la cantidad de parámetros sea válida (al menos, inicialmente).
+	errorInvocacion "Cantidad de parámetros incorrecta"
+fi
 
+case "$1" in
 
-while [ -n $1 ]; do #Verifica que el string no sea nulo
-	
-	case $1 in
-	
-	start)
-		if [ $# -lt 4 ]
-			then
-				echo "No se han ingresado todos los parametros requeridos"
-				echo "Se debe ingresar el path de los archivos a los cuales se les quiere realizar el backup, el path del backup, y el tiempo entre backups en segundos"
-				exit -1
+	'start') 
+		if [ $# -eq 4 ] && [ $4 -ge 1 ]; then # Cant. de parámetros correcta y tiempo mayor a 1?
+			esDirectorio "$2" # Existe el directorio de bkp?
+			esDirectorio "$3" # Existe el directorio destino?
+			pidDemonio=`existeDemonio`
+			
+			if [ $pidDemonio ]; then # Verifico existencia demonio.
+				echo -e "\nYa existe un demonio en ejecución."
+			else
+				echo -e "\nIniciando demonio..."
+				echo $3 > "datos_demonio.txt" # Guardo path del directorio de almacenamiento.
+				./demonio.sh "$2" "$3" $4 &
+			        pidDemonio=$!
 			fi
 
-		verificoDemonioActivo
-		if [ $? -eq 0 ]
-			then
-				Iniciar_Demonio "$2" "$3" $4
-			else
-				 echo "Ya hay un demonio corriendo actualmente"
+			echo -e "PID: $pidDemonio\n"
+			exit 0
+		else
+			errorInvocacion "Cantidad de parámetros incorrecta o tiempo menor a 1"
 		fi
-		exit 1
-		;;
+	;;
 
-	stop)
-		verificoDemonioActivo
-		if [ $? -eq 0 ]
-			then
-				echo "No hay un demonio corriendo actualmente"
+	'stop')
+		if [ $# -eq 1 ]; then # Cant. de parámetros correcta?
+			pidDemonio=`existeDemonio`
+
+			if [ $pidDemonio ]; then # Verifico existencia demonio.
+				echo -e "\nDeteniendo demonio..."
+				echo -e "PID: $pidDemonio"
+				kill $pidDemonio # Ejecuto SIGTERM para el demonio.
+				echo -e "Demonio detenido.\n"
 			else
-				pid=$(pgrep -x sh)
-				kill $pid
-				
+				echo -e "\nNo existe un demonio en ejecución.\n"
+			fi
+			exit 0
+		else
+			errorInvocacion "Cantidad de parámetros incorrecta"
 		fi
-		exit 1
-		;;
-		
-	count)
-		if [ -d "$2" ]
-			then
-				echo "Se ha encontrado la siguiente cantidad de backups en el directorio '$2'"
-				ls -1q "$2"bkp* | wc -l
+	;;
+
+	'count')
+		if [ $# -eq 1 ]; then # Cant. de parámetros correcta?
+			pidDemonio=`existeDemonio`
+
+			if [ $pidDemonio ]; then # Verifico existencia demonio.
+				kill -10 $pidDemonio # Envío señal al demonio (para realizar la cuenta de bkps).
 			else
-				echo "El directorio de backups no existe."
+				echo -e "\nNo existe un demonio en ejecución.\n"
+			fi
+			exit 0
+		else
+			errorInvocacion "Cantidad de parámetros incorrecta"
 		fi
-		exit 1
-		;;
+	;;
 	
-	clear)
-		if [ -d "$2" ]
-			then
-				rm -rf "$2" && mkdir "$2"
-				echo "Se ha vaciado el directorio de backups"
-			else
-				echo "El directorio de backups no existe."
+	'clear')
+		if [ $# -eq 2 ] && [ $2 -ge 0 ]; then # Cant. de parámetros correcta y cantidad restante válida?
+			resto=$2
+		elif [ $# -eq 1 ]; then # Cant. de parámetros correcta y cantidad restante = 0?
+			resto=0
+		else
+			errorInvocacion "Cantidad de parámetros incorrecta o cantidad de archivos restantes menor a 0"
 		fi
-		exit 1
-		;;
-		
-	play)		
-		nombre_archivo=bkp_$(date '+%d_%m_%Y_%H_%M_%S').tar.gz
-		tar czf "$3"/$nombre_archivo "$2"
-		echo "Backup realizado correctamente."
-		exit 1
-		;;
 
-	*)
-		echo "La opción ingresada es incorrecta. Ingrese la opción -h para ver la ayuda"
-		exit 1
-		;;
-	esac 
-	shift
-done
+		dirStorage=`cat datos_demonio.txt` # Obtengo path del directorio de almacenamiento.
+		archivosBKP=`ls -t "$dirStorage"` # Ordeno los archivos de bkp, de más nuevos a más viejos.
+		IFS=$'\n'
+		
+		for archivo in $archivosBKP
+		do
+			if [ $resto -ne 0 ]; then # El archivo se conserva?
+				resto=$((resto-1))
+				continue
+			else
+				rm "$dirStorage$archivo" # Borro archivo
+			fi
+		done
+		
+		unset IFS
+		exit 0
+	;;
+	
+	'play')
+		if [ $# -eq 1 ]; then # Cant. de parámetros correcta?
+			pidDemonio=`existeDemonio`
+
+			if [ $pidDemonio ]; then # Verifico existencia demonio.
+				echo "Realizando backup instantáneo..."
+				kill -12 $pidDemonio # Envío señal al demonio (para realizar el bkp instantáneo).
+			else
+				echo -e "\nNo existe un demonio en ejecución.\n"
+			fi
+			exit 0
+		else
+			errorInvocacion "Cantidad de parámetros incorrecta"
+		fi
+	;;
+
+	'-?'|'-h'|'--help')
+		if [ $# -eq 1 ]; then # Cant. de parámetros correcta?
+			mostrarSintaxis # Muestro sintaxis
+			exit 0
+		else
+			errorInvocacion "Cantidad de parámetros incorrecta"
+		fi
+	;;
+
+	*) # Comando del demonio no válido
+		errorInvocacion "Comando erróneo"
+	;;
+esac
+					

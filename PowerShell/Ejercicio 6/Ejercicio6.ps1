@@ -30,7 +30,7 @@ Autores:
     - Fiorita, Leandro
     - Gentile, Soledad
     - Peralta, Julian
-Entrega: #1
+Entrega: #2
 #>
 [CmdletBinding()]
 param ( #Genero dos Sets de Parametros para que los parametros se llamen juntos y se excluyan mutuamente.
@@ -104,6 +104,7 @@ function Test-Archivos
 
 Test-Archivos $Entrada
 $Mat1 = Get-Content -Path $Entrada #Obtengo el contenido del archivo de texto de entrada
+$Fil = $Mat1.Length
 $Mat1 = $Mat1.Split('|') #Genero un array, separando el contenido del archivo por cada '|'
 
 $Mat1 = for ($i = 0; $i -lt $Mat1.Count; $i++) {   
@@ -128,7 +129,26 @@ else { #Si no hay suma hay producto
 $outputFile = Split-Path $Entrada -leaf
 $Salida = "salida." + $outputFile
 #Le doy formato y guardo la matriz en el archivo
-$Mat1 = $Mat1 -join "|"
-$Mat1 | Out-File -FilePath $Salida
+$Col = $Mat1.Length / $Fil
+
+
+#Creo un array con la cantidad de elementos por fila correspondientes
+for ($i = 0; $i -lt $Mat1.Count; $i += $Col){
+    $Matriz += ,@($Mat1[$i..($i+$Col-1)])
+}
+
+#Veo si existe el archivo de salida, si es así lo elimino
+if(Test-Path $Salida){
+    Remove-Item $Salida
+}
+
+#creo un nuevo archivo de salida
+New-Item $Salida 
+
+#Le doy formato a la matriz y la guardo
+for ($i = 0; $i -lt $Matriz.Length; $i++){
+    $Matriz[$i] -join "|" | Add-Content $Salida
+}
+
 Write-Host "Se ha creado el archivo $Salida"
 #Fin del Script
