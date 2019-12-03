@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <signal.h>
@@ -17,7 +18,12 @@
 #define NO_MEM -1
 #define EXITO 1
 
-#define MAX_THREADS 1000
+typedef struct
+{
+    int tipoConsulta;
+    char valorConsulta[40];
+    char consulta[60];
+} Consulta;
 
 typedef struct
 {
@@ -37,7 +43,7 @@ typedef struct
 } t_args_aceptConex;
 
 /*
-* Abre un socket de servidor en el puerto que se le pasa por parametro.
+* Abre un socket de servidor en la IP y el puerto que se le pasa por parametro.
 * El socket queda listo para aceptar conexiones de clientes.
 * Retorna el file descriptor del socket. En caso de error retorna -1
 */
@@ -67,9 +73,25 @@ void eliminarNewline(char* linea);
 
 int strcmpi(char const *a, char const *b);
 
+Consulta identificarConsulta(char* consulta);
+
 int checkDirectorio(const char* ruta);
 
 void terminar(int signum);
+
+void cancelarThreads();
+
+void broadcast();
+
+int cantPuntos(char* ip);
+
+int digitoValido(char *octeto);
+
+int validarIP(char* ip);
+
+int validarPuerto(char* puerto);
+
+void ayuda();
 
 static void skeleton_daemon();
 
@@ -78,22 +100,30 @@ static void skeleton_daemon();
 pthread_mutex_t mutex;
 int socketServ;
 
+int cantThreads = 0;
+int cantClientes = 0;
+int* clientes;
+pthread_t* threadsClientes;
+
 int main(int argc, char* argv[])
 {
     int socketCli, contThreadActual = 0, resCrearThread;
-    pthread_t threadCli[MAX_THREADS];
     // Hay un error rarisimo si no uso este mutex auxiliar, probalo sin el auxiliar si te animas
     pthread_mutex_t auxMutex = PTHREAD_MUTEX_INITIALIZER;
     mutex = auxMutex;
     t_args_aceptConex argsAceptarConexion;
 
-    skeleton_daemon();
     signal(SIGINT,terminar);
     signal(SIGTERM, terminar);
 
-    if(argc != 2)
+    if(argc == 2 && (strcmp(argv[1],"-h")==0 || strcmp(argv[1], "-help")==0 || strcmp(argv[1], "-?")==0))
     {
-        printf("No se paso ningun path para el archivo.");
+        ayuda();
+        return 1;
+    }
+    else if(argc != 3)
+    {
+        printf("Cantidad de parámetros incorrecta. Para consultar la ayuda ejecute el programa con los parámetros -h, -help o -?.");
         terminar(SIGINT);
     }
 
@@ -103,19 +133,36 @@ int main(int argc, char* argv[])
         terminar(SIGINT);
     }
 
+    // if(validarIP(argv[2]) == 0)
+    // {
+    //     // printf("La dirección IP indicada es inválida.");
+    //     terminar(SIGINT);
+    // }
+
+    if(validarPuerto(argv[2]) == 0)
+    {
+        printf("El puerto indicado es inválido.");
+        terminar(SIGINT);
+    }
+
+    skeleton_daemon();
+
     strncpy(argsAceptarConexion.pathArchivo, argv[1], 500); // Este es el parametro que tiene el nombre del archivo
 
     argsAceptarConexion.mutex = mutex;
 
-    socketServ = abrirSocket(15000); // Lo abro en el puerto 15000 (porque si, se me ocurrio)
+    socketServ = abrirSocket(atoi(argv[2]));
     if(socketServ < 0)
         exit(EXIT_FAILURE);
 
-    if(listen(socketServ, 5) < 0) // Hago que el socket empiece a escuchar clientes (5 clientes en espera)
+    if(listen(socketServ, 10) < 0) // Hago que el socket empiece a escuchar clientes (10 clientes en espera)
     {
         perror("listen");
         exit(EXIT_FAILURE);
     }
+
+    clientes = (int*)malloc(sizeof(int));
+    threadsClientes = (pthread_t*)malloc(sizeof(pthread_t));
 
     while(1)
     {
@@ -125,27 +172,24 @@ int main(int argc, char* argv[])
         {
             argsAceptarConexion.socketCliFD = socketCli;
 
-            if(contThreadActual < MAX_THREADS)
-            {
-                resCrearThread = pthread_create(&threadCli[contThreadActual], NULL, atenderCliente, &argsAceptarConexion);
+            resCrearThread = pthread_create(&threadsClientes[cantThreads], NULL, atenderCliente, &argsAceptarConexion);
 
-                if(resCrearThread < 0)
-                {
-                    printf("Error de creacion de thread de atencion a cliente.\n");
-                    printf("Cerrando file descriptor %d...\n", socketCli);
-                    close(socketCli);
-                }
-                else
-                {
-                    contThreadActual++;
-                    printf("Creado el thread para el cliente %d", socketCli);
-                    pthread_detach(threadCli[contThreadActual]);
-                }
+            if(resCrearThread < 0)
+            {
+                // printf("\nError de creacion de thread de atencion a cliente.\n");
+                // printf("Cerrando file descriptor %d...\n", socketCli);
+                close(socketCli);
             }
             else
             {
-                printf("No hay mas threads para crear, reinicie el servidor\n");
-                close(socketCli);
+                clientes[cantClientes] = socketCli;
+
+                clientes = (int*)realloc(clientes, sizeof(int) * (cantClientes + 1));
+                threadsClientes = (pthread_t*)realloc(threadsClientes, sizeof(pthread_t) * (cantThreads + 1));
+
+                cantThreads++;
+                cantClientes++;
+                // printf("\nCreado el thread para el cliente %d", socketCli);
             }
         }
         else
@@ -172,7 +216,7 @@ int abrirSocket(uint16_t puerto)
     /* Le doy un nombre al socket */
     nombreSocket.sin_family = AF_INET;    // La familia de direcciones que puede leer son IPv4
     nombreSocket.sin_port = htons(puerto);
-    nombreSocket.sin_addr.s_addr = htons(INADDR_ANY); // Que acepte cualquier direccion
+    nombreSocket.sin_addr.s_addr = htonl(INADDR_ANY); // Que acepte cualquier direccion
 
     if(bind(servSockFD, (struct sockaddr*) &nombreSocket, sizeof(nombreSocket)) < 0)
     {
@@ -200,7 +244,7 @@ int aceptarConexion(int servSockFD)
         return ERR_CLI_SOCK;
     }
 
-    printf("Cliente aceptado\n");
+    // printf("Cliente aceptado\n");
     return clienteSockFD;
 }
 
@@ -211,6 +255,7 @@ void* atenderCliente(void* args)
     int clienteSockFD = argumentos.socketCliFD;
     ssize_t resLectura;
     char datos[256], pathArchivoArt[500], respuesta[16];
+    Consulta consulta;
 
     bzero(respuesta, 16);
     bzero(datos, 256);
@@ -218,34 +263,63 @@ void* atenderCliente(void* args)
     strcpy(pathArchivoArt, argumentos.pathArchivo);
     strcpy(respuesta, "Desconectar");
 
-    printf("Atendiendo cliente...");
+    // printf("\nAtendiendo cliente...\n");
     do
     {
         resLectura = read(clienteSockFD, datos, 256);
 
         if(resLectura < 0)
             printf("Error de lectura");
-        else if(strcmp(datos, "QUIT\n") != 0)
+        else
         {
+
+            consulta = identificarConsulta(datos);
+            
             // Inicio de zona critica
             pthread_mutex_lock(&mutex);
 
-            if(strncmp("ID", datos, 2) == 0)
-                buscarID(datos, pathArchivoArt, clienteSockFD);
-            else if(strncmp("ARTICULO", datos, 8) == 0)
-                buscarDescripcion(datos, pathArchivoArt, clienteSockFD);
-            else if(strncmp("MARCA", datos, 5) == 0)
-                buscarMarca(datos, pathArchivoArt, clienteSockFD);
-            else if(strncmp("PRODUCTO", datos, 8) == 0)
-                buscarProducto(datos, pathArchivoArt, clienteSockFD);
-            else
-                enviarArticuloVacio(clienteSockFD);
+            // if(strncmp("ID", datos, 2) == 0)
+            //     buscarID(datos, pathArchivoArt, clienteSockFD);
+            // else if(strncmp("ARTICULO", datos, 8) == 0)
+            //     buscarDescripcion(datos, pathArchivoArt, clienteSockFD);
+            // else if(strncmp("MARCA", datos, 5) == 0)
+            //     buscarMarca(datos, pathArchivoArt, clienteSockFD);
+            // else if(strncmp("PRODUCTO", datos, 8) == 0)
+            //     buscarProducto(datos, pathArchivoArt, clienteSockFD);
+            // else
+            //     enviarArticuloVacio(clienteSockFD);
+
+            switch(consulta.tipoConsulta)
+            {
+                case 1:
+                    buscarID(consulta.valorConsulta, pathArchivoArt, clienteSockFD);
+                    break;
+
+                case 2:
+                    buscarDescripcion(consulta.valorConsulta, pathArchivoArt, clienteSockFD);
+                    break;
+
+                case 3:
+                    buscarProducto(consulta.valorConsulta, pathArchivoArt, clienteSockFD);
+                    break;
+
+                case 4:
+                    buscarMarca(consulta.valorConsulta, pathArchivoArt, clienteSockFD);
+                    break;
+
+                case 5:
+                    break;
+                case 0:
+                    buscarMarca(consulta.valorConsulta, pathArchivoArt, clienteSockFD);
+                    // //printf("Se ha ingresado una consulta invalida.\n");
+                    //terminar(SIGINT);
+            }
 
             pthread_mutex_unlock(&mutex);
             // Fin de zona critica
         }
 
-    } while(strcmp(datos, "QUIT\n") != 0);
+    } while(consulta.tipoConsulta != 5);
 
     write(clienteSockFD, respuesta, 16);
     close(clienteSockFD);
@@ -256,29 +330,41 @@ void* atenderCliente(void* args)
 void buscarID(char* IDABuscar, char* nomArchivo, int clienteSockFD)
 {
     Articulo art;
+    char artEncontrado = 'n';
 
     int idSearch;
     char idString[10], respuesta[16];
     FILE *fp = fopen(nomArchivo, "r") ;
     if (!fp)
     {
-        printf("No existe el archivo.\n");
+        // printf("No existe el archivo.\n");
+        terminar(SIGINT);
         return;
     }
     bzero(respuesta, 16);
 
-    idSearch = atoi(IDABuscar + 3); // Le paso la parte del string que viene despues del '='
-
+    eliminarNewlineN(IDABuscar);
+    idSearch = atoi(IDABuscar);
     fseek(fp,1L, SEEK_SET);
     while (fscanf(fp,"%[^;];%[^;];%[^;];%[^\n]", idString, art.descripcion, art.producto, art.marca) && !feof(fp))
     {
         art.id = atoi(idString);
         if(art.id == idSearch)
         {
+            artEncontrado = 's';
             // Como es un ID solo hay una coincidencia
             write(clienteSockFD, &art, sizeof(Articulo));
+            read(clienteSockFD, respuesta, 16);
             break;
         }
+    }
+
+    if(artEncontrado == 'n')
+    {
+        art.id = 0;
+        write(clienteSockFD, &art, sizeof(Articulo));
+        read(clienteSockFD, respuesta, 16);
+        bzero(respuesta, 16);
     }
 
     // Aviso al cliente que termino la busqueda
@@ -288,29 +374,30 @@ void buscarID(char* IDABuscar, char* nomArchivo, int clienteSockFD)
     return;
 }
 
-void buscarDescripcion(char* desc, char* nomArchivo, int clienteSockFD)
+void buscarDescripcion(char* descABuscar, char* nomArchivo, int clienteSockFD)
 {
     Articulo art;
+    char artEncontrado = 'n';
 
-    char idString[10], respuesta[16], descABuscar[100];
+    char idString[10], respuesta[16];
     FILE *fp = fopen(nomArchivo, "r") ;
     if (!fp)
     {
-        printf("No existe el archivo.\n");
+        // printf("No existe el archivo.\n");
+        terminar(SIGINT);
         return;
     }
     bzero(respuesta, 16);
-    bzero(descABuscar, 100);
 
-    eliminarNewlineN(desc);
-    strcpy(descABuscar, desc + 12); // Le guardo el nombre del producto
+    eliminarNewlineN(descABuscar);
 
     fseek(fp,1L, SEEK_SET);
     while (fscanf(fp,"%[^;];%[^;];%[^;];%[^\n]", idString, art.descripcion, art.producto, art.marca) && !feof(fp))
     {
         art.id = atoi(idString);
-        if(strcmpi(descABuscar,art.descripcion) == 0)
+        if(strcmpi(descABuscar, art.descripcion) == 0)
         {
+            artEncontrado = 's';
             write(clienteSockFD, &art, sizeof(Articulo));
 
             // Leo la respuesta del cliente que me dice "siguiente"
@@ -319,6 +406,14 @@ void buscarDescripcion(char* desc, char* nomArchivo, int clienteSockFD)
         }
     }
     bzero(respuesta, 16);
+
+    if(artEncontrado == 'n')
+    {
+        art.id = 0;
+        write(clienteSockFD, &art, sizeof(Articulo));
+        read(clienteSockFD, respuesta, 16);
+        bzero(respuesta, 16);
+    }
 
     strcpy(respuesta, "Terminado");
     write(clienteSockFD, respuesta, 16);
@@ -329,26 +424,27 @@ void buscarDescripcion(char* desc, char* nomArchivo, int clienteSockFD)
 void buscarProducto(char* producto, char* nomArchivo, int clienteSockFD)
 {
     Articulo art;
+    char artEncontrado = 'n';
 
-    char idString[10], respuesta[16], productoBusqueda[50];
+    char idString[10], respuesta[16];
     FILE *fp = fopen(nomArchivo, "r") ;
     if (!fp)
     {
-        printf("No existe el archivo.\n");
+        // printf("No existe el archivo.\n");
+        terminar(SIGINT);
         return;
     }
     bzero(respuesta, 16);
-    bzero(productoBusqueda, 50);
 
     eliminarNewlineN(producto);
-    strcpy(productoBusqueda, producto + 9); // Le guardo el nombre del producto
 
     fseek(fp,1L, SEEK_SET);
     while (fscanf(fp,"%[^;];%[^;];%[^;];%[^\n]\n", idString, art.descripcion, art.producto, art.marca) && !feof(fp))
     {
         art.id = atoi(idString);
-        if(strcmpi(producto,art.producto) == 0)
+        if(strcmpi(producto, art.producto) == 0)
         {
+            artEncontrado = 's';
             write(clienteSockFD, &art, sizeof(Articulo));
 
             // Leo la respuesta del cliente que me dice "siguiente"
@@ -358,36 +454,45 @@ void buscarProducto(char* producto, char* nomArchivo, int clienteSockFD)
     }
     bzero(respuesta, 16);
 
+    if(artEncontrado == 'n')
+    {
+        art.id = 0;
+        write(clienteSockFD, &art, sizeof(Articulo));
+        read(clienteSockFD, respuesta, 16);
+        bzero(respuesta, 16);
+
+    }
     strcpy(respuesta, "Terminado");
     write(clienteSockFD, respuesta, 16);
     fclose(fp);
     return;
 }
 
-void buscarMarca(char* marca, char* nomArchivo, int clienteSockFD)
+void buscarMarca(char* marcaBusqueda, char* nomArchivo, int clienteSockFD)
 {
     Articulo art;
+    char artEncontrado = 'n';
 
-    char idString[10], respuesta[16], marcaBusqueda[50];
+    char idString[10], respuesta[16];
     FILE *fp = fopen(nomArchivo, "r") ;
     if (!fp)
     {
-        printf("No existe el archivo.\n");
+        // printf("No existe el archivo.\n");
+        terminar(SIGINT);
         return;
     }
     bzero(respuesta, 16);
-    bzero(marcaBusqueda, 50);
 
-    eliminarNewlineN(marca);
-    strcpy(marcaBusqueda, marca + 6); // Le guardo el nombre de la marca
+    eliminarNewlineN(marcaBusqueda);
 
     fseek(fp,1L, SEEK_SET);
     while (fscanf(fp,"%[^;];%[^;];%[^;];%[^\n]", idString, art.descripcion, art.producto, art.marca) && !feof(fp))
     {
         eliminarNewline(art.marca);
         art.id = atoi(idString);
-        if(strcmpi(marcaBusqueda,art.marca) == 0)
+        if(strcmpi(marcaBusqueda, art.marca) == 0)
         {
+            artEncontrado = 's';
             write(clienteSockFD, &art, sizeof(Articulo));
 
             // Leo la respuesta del cliente que me dice "siguiente"
@@ -397,6 +502,14 @@ void buscarMarca(char* marca, char* nomArchivo, int clienteSockFD)
     }
 
     bzero(respuesta, 16);
+
+    if(artEncontrado == 'n')
+    {
+        art.id = 0;
+        write(clienteSockFD, &art, sizeof(Articulo));
+        read(clienteSockFD, respuesta, 16);
+        bzero(respuesta, 16);
+    }
 
     strcpy(respuesta, "Terminado");
     write(clienteSockFD, respuesta, 16);
@@ -448,6 +561,52 @@ int strcmpi(char const *a, char const *b)
     }
 }
 
+Consulta identificarConsulta(char* consulta)
+{
+    Consulta retorno;
+    char* valor;
+    char* campo;
+    char copiaConsulta[60];
+    strcpy(copiaConsulta,consulta);
+
+    valor = strchr(consulta,'=');
+    if(valor == NULL)
+    {
+        eliminarNewlineN(consulta);
+        if(strcmpi(consulta, "quit") == 0)
+            retorno.tipoConsulta = 5;
+        else
+            retorno.tipoConsulta = 0;
+        strcpy(retorno.valorConsulta, "0000\n");
+        return retorno;
+    }
+    valor++;
+    campo = strtok(copiaConsulta, "=");
+    if(campo == NULL)
+    {
+        retorno.tipoConsulta = 0;
+        strcpy(retorno.valorConsulta, "0000\n");
+        return retorno;
+    }
+    if(strcmpi(campo,"id") == 0)
+        retorno.tipoConsulta = 1;
+    else if(strcmpi(campo,"descripcion") == 0)
+        retorno.tipoConsulta = 2;
+    else if(strcmpi(campo,"producto") == 0)
+        retorno.tipoConsulta = 3;
+    else if(strcmpi(campo,"marca") == 0)
+        retorno.tipoConsulta = 4;
+    else
+    {
+        retorno.tipoConsulta = 0;
+        strcpy(retorno.valorConsulta, "0000\n");
+        return retorno;
+    }
+    strcpy(retorno.valorConsulta, valor);
+    strcpy(retorno.consulta, "null");
+    return retorno;
+}
+
 int checkDirectorio(const char* ruta)
 {
     struct stat path_stat;
@@ -458,9 +617,169 @@ int checkDirectorio(const char* ruta)
 void terminar(int signum)
 {
     printf("\nSaliendo...\n");
+    broadcast();
+
     close(socketServ);
     pthread_mutex_destroy(&mutex);
     exit(1);
+}
+
+void cancelarThreads()
+{
+    int i;
+    void *resJoin;
+
+    for(i = 0; i < cantThreads; i++)
+    {
+        pthread_cancel(threadsClientes[i]);
+        pthread_join(threadsClientes[i], &resJoin);
+
+        if(resJoin == PTHREAD_CANCELED)
+            printf("Thread %d cancelado\n", i);
+    }
+}
+
+void broadcast()
+{
+	char mensaje[16]="Cancelado\0";
+	for(int i=0; i<cantClientes; i++)
+	{
+		printf("<< Broadcast a cliente: <%d> || size: <%ld> >>\n", clientes[i], sizeof(mensaje));
+		write(clientes[i], &mensaje, 16);
+        close(clientes[i]);
+	}
+    cancelarThreads();
+    free(threadsClientes);
+	free(clientes);
+}
+
+int cantPuntos(char* ip)
+{
+    int cantPuntos = 0;
+
+    while(*ip)
+    {
+        if(*ip == '.')
+            cantPuntos++;
+        ip++;
+    }
+
+    return cantPuntos;
+}
+
+int digitoValido(char *octeto)
+{ 
+    while (*octeto) { 
+        if (*octeto >= '0' && *octeto <= '9') 
+            ++octeto; 
+        else
+            return 0; 
+    } 
+    return 1; 
+} 
+
+int validarIP(char* ip)
+{
+    char copiaIP[30], *token;
+    int contPuntos = 0, octeto;
+    
+    if(ip == NULL)
+        return 0;
+    
+    eliminarNewlineN(ip);
+    strcpy(copiaIP, ip);
+    
+    if(cantPuntos(copiaIP) != 3)
+        return 0;
+
+    token = strtok(copiaIP, ".");
+
+    if(token == NULL)
+        return 0;
+
+    while(token != NULL)
+    {
+        if(!digitoValido(token))
+            return 0;
+
+        octeto = atoi(token);
+
+        if(octeto >= 0 && octeto <= 255)
+        {
+            token = strtok(NULL, ".");
+            if(token != NULL)
+                contPuntos++;
+        }
+        else
+            return 0;
+    }
+
+    if(contPuntos != 3)
+        return 0;
+    return 1;
+}
+
+int validarPuerto(char* puerto)
+{
+    char copiaPuerto[10];
+    int nroPuerto;
+
+    if(puerto == NULL)
+        return 0;
+    eliminarNewlineN(puerto);
+
+    strcpy(copiaPuerto, puerto);
+
+    if(!digitoValido(copiaPuerto))
+        return 0;
+
+    nroPuerto = atoi(copiaPuerto);
+
+    if(nroPuerto < 10000 || nroPuerto > 20000)
+        return 0;
+    return 1;
+}
+
+void ayuda()
+{
+    // puts("-------------------------\n");
+    // puts("El programa se conecta al servidor para hacer consultas sobre un archivo de articulos varios");
+    // puts("Las consultas posibles son:\n");
+    // puts("\t* ID=<Id_articulo>");
+    // puts("\t* ARTICULO=<Descripcion_articulo>");
+    // puts("\t* PRODUCTO=<Nombre_articulo>");
+    // puts("\t* MARCA=<Marca_articulo>");
+    // puts("\n-------------------------\n");
+
+    puts("\n-------------------------\n");
+
+    puts("Ejercicio 5 - Trabajo Práctico 3 - Tercera entrega\n");
+    printf("\nIntegrantes:");
+    printf("\n\tCarbone, Emanuel \t  40081161");
+    printf("\n\tDe Stefano, Matias \t  40130248");
+    printf("\n\tFiorita, Leandro \t  40012291");
+    printf("\n\tGentile, Soledad \t  28053027");
+    printf("\n\tPeralta, Julian \t  40242831\n\n");
+
+    printf("Descripción:\n");
+    printf("Se tiene una base de datos de artículos de un supermercado en un archivo de texto el cual se le pasa su dirección en el directorio actual del servidor.");
+    puts("La identificación del articulo se hace a través de su número de ID. El archivo tiene el siguiente formato:\n");
+    puts("\tID;Descripción;Producto;Marca\n");
+    puts("Las consultas se pueden realizar para cualquier campo.");
+    puts("El formato de las consultas es el siguiente:\n");
+    puts("\tCampo=Valor - Ejemplo: Producto=HELADO\n");
+    puts("* El servidor atiende las peticiones generadas desde un cliente. *");
+    puts("* El ejercicio esta hecho con sockets y pthreads. *\n");
+
+    puts("Los parámetros a pasar al programa son los siguientes:");
+    puts("\t* Path al archivo de artículos");
+    // puts("\t* Dirección IP del servidor");
+    puts("\t* Número del puerto del servidor (entre 10000 y 20000 incluídos)\n");
+
+    puts("Ejemplo de ejecución de este programa:");
+    puts("\t./server /ruta/archivo/articulos.txt 127.0.0.1 15000");
+
+    puts("\n-------------------------\n");
 }
 
 static void skeleton_daemon()
